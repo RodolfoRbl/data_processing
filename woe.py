@@ -7,7 +7,7 @@ from pyspark.sql.functions import col
 
 
 class WOE_IV:
-
+    
     def __init__(self, df: DataFrame, cols_to_woe: [str], label_column: str, good_label: int):
         self.df = df
         self.cols_to_woe = cols_to_woe
@@ -58,7 +58,6 @@ class WOE_IV:
         with open(path,'w') as file:
             json.dump(self.fit_data, file)
         print('Datos guardados')
-
 
     @classmethod
     def transform(self, df: DataFrame, drop_original = False):
