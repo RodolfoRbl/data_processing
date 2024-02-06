@@ -53,7 +53,14 @@ class WOE_IV:
             self.fit_data[col_to_woe] = woe_info
         else:
             self.fit_data[col_to_woe].update(woe_info)
+    
+    def save_params(self, path):
+        with open(path,'w') as file:
+            json.dump(self.fit_data, file)
+        print('Datos guardados')
 
+
+    @classmethod
     def transform(self, df: DataFrame, drop_original = False):
         for col_to_woe, woe_info in self.fit_data.items():
             itera_woe_info =  F.coalesce(*[F.when(F.col(col_to_woe) == category, F.lit(woe_iv['woe'])) for category, woe_iv in woe_info.items()],F.lit(0))
@@ -61,12 +68,8 @@ class WOE_IV:
         if drop_original:
             return df.drop(*self.fit_data.keys())
         return df
-    
-    def save_params(self, path):
-        with open(path,'w') as file:
-            json.dump(self.fit_data, file)
-        print('Datos guardados')
 
+    @classmethod
     def load_params(self, path):
         with open(path,'r') as file:
             self.fit_data = json.load(file)
