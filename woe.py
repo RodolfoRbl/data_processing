@@ -1,3 +1,9 @@
+import math
+import json
+from pandas import DataFrame
+from pyspark.sql.functions import col
+import pyspark.sql.functions as F
+
 class WOE_IV:
     
     def __init__(self, df: DataFrame, cols_to_woe: [str], label_column: str, good_label: int):
@@ -6,6 +12,7 @@ class WOE_IV:
         self.label_column = label_column
         self.good_label = good_label
         self.fit_data = {}
+        
     def fit(self):
         agg_class = self.df.groupby((col(self.label_column) == self.good_label).alias('ix_good_label')).count().cache()
         total_good = agg_class.filter(F.col('ix_good_label') == 'true').select('count').collect()[0][0]
