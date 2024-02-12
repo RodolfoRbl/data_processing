@@ -58,18 +58,22 @@ class WOE_IV:
         with open(path,'w') as file:
             json.dump(self.fit_data, file)
         print('Datos guardados')
+    
     @classmethod
     def transform(self, df: DataFrame, drop_original = False, only_consider = []):
         '''transformar df'''
         temp_dic = {key: self.fit_data[key] for key in self.fit_data if key in only_consider} if only_consider else self.fit_data        
         for col_to_woe, woe_info in temp_dic.items():
+            #Caso en el que originalmente si habia null o no
+            cat_null_value = F.lit(temp_dic[col_to_woe]['null']['woe']) if temp_dic[col_to_woe].get('null') else F.lit(0)
+            
             itera_woe_info =  F.coalesce(*[F.when(F.col(col_to_woe) == category, F.lit(woe_iv['woe'])) for category, woe_iv in woe_info.items()],
-                                         F.lit(woe_info['null']['woe']),
-                                         F.lit(0))
+                                         F.when(F.col(col_to_woe).isNull(),cat_null_value),F.lit(0))
             df = df.withColumn(col_to_woe + '_woe', itera_woe_info)
         if drop_original:
             return df.drop(*self.fit_data.keys())
         return df
+    
     @classmethod
     def load_params(self, path):
         with open(path,'r') as file:
