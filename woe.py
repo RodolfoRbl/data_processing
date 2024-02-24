@@ -6,7 +6,7 @@ import pyspark.sql.functions as F
 
 class WOE_IV:
     
-    def __init__(self, df: DataFrame, cols_to_woe: [str], label_column: str, good_label: int):
+    def __init__(self, df: DataFrame, cols_to_woe: list[str], label_column: str, good_label: int):
         self.df = df
         self.cols_to_woe = cols_to_woe
         self.label_column = label_column
