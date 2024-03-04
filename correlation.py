@@ -1,9 +1,11 @@
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-#from pyspark.ml.classification import RandomForestClassifier as rfc_sp
-#from pyspark.ml.feature import VectorAssembler
 from pyspark.sql import functions as F
 import pyspark
+import seaborn as sns
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.stat import Correlation
+import matplotlib.pyplot as plt
 
 class CleanCorrelation:
 
@@ -14,6 +16,28 @@ class CleanCorrelation:
         self.correlated_groups = self.get_correlated_groups(self.threshold)
         self.feats_correlated = sorted(list(self.get_unique_corr_feats(self.threshold)))
         self.feats_not_correlated = sorted(list(set(self.corr_matrix.columns).difference(self.feats_correlated)))
+
+    
+    @classmethod    
+    def heatmap(cls, corr_matrix, height = 10, width = 10):
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(height, width))
+        sns.heatmap(corr_matrix, annot = True, cbar = False, 
+                    annot_kws = {"size": 8}, vmin = -1, vmax = 1, center = 0,
+                    cmap = sns.diverging_palette(20, 220, n=200),square = True,ax = ax)
+        ax.set_xticklabels(ax.get_xticklabels(),rotation = 45,horizontalalignment = 'right')
+        ax.tick_params(labelsize = 10)
+
+
+    @classmethod
+    def get_correlation(cls, df:pyspark.sql.dataframe.DataFrame, drop=[]):
+        df2 = df.drop(*drop) if drop else df
+        features = df2.columns
+        assembler = VectorAssembler(inputCols=features, outputCol='features')
+        df_vector = assembler.transform(df2).select('features')
+        matrix = Correlation.corr(df_vector, 'features').collect()[0][0] 
+        corr_matrix = matrix.toArray().tolist() 
+        corr_matrix_df = pd.DataFrame(data=corr_matrix, columns = features, index=features) 
+        return corr_matrix_df
 
 
     def get_unique_corr_feats(self,threshold):
@@ -86,6 +110,53 @@ class CleanCorrelation:
             selected.append(self._select_less_zeros(group, abt))
         return selected
 
+    
+    def clean_with_one_side(self):
+        '''Keep all the columns from one side of the highly correlated pairs'''
+        all_feats = self.corr_matrix.columns
+        pairs = self.corr_matrix.unstack().sort_index().reset_index().rename(columns={0:'corr'})
+        
+        #Quitar pares duplicados y diagonal orig
+        out = pairs[~pairs[['level_0', 'level_1']].apply(frozenset, axis=1).duplicated()]
+        out = out[out.level_1 != out.level_0]
+        out['abs_corr'] = out['corr'].apply(lambda x: abs(x))
+        out = out[out.abs_corr >= self.threshold]
+        
+        #Variables unicas con altas correlaciones
+        highly_correlated = list(set(out.level_0.to_list() + out.level_1.to_list()))
+        print(f'Hay {out.shape[0]} pares que superan el {self.threshold} de correlacion y contemplan  {len(highly_correlated)} distintas variables')
+        feats_no_corr = [i for i in all_feats if i not in highly_correlated]
+        
+        #Conservar 1 variable de cada par con alta correlacion
+        preserve_corr = list(set(out.level_0.to_list()))
+        final_preserve = [i for i in preserve_corr if i not in set(out.level_1.to_list())]
+        
+        final_feats = feats_no_corr + final_preserve
+        print(f'Se agregaron {len(final_preserve)} variables a las {len(feats_no_corr)} que no superaban el {self.threshold} de correlacion\n')
+        print(f'VARIABLES FINALES:  {len(final_feats)}')
+        return final_feats,out
+    
+        
+    def clean_with_rank(self, predictors2,corr_matrix_df): #Funcion de JC
+        'Excluye variables que esten correlacionadas con una de mayor importancia'
+        try:
+            exclude=[]
+            for j,col_i in enumerate(predictors2[0:20]):
+                if col_i in exclude+["segmento_risk","SEG_VIDA"]:
+                    print("Ignoring ",col_i)
+                    continue
+                print(corr_matrix_df.shape)
+                corr_matrix_df_i=corr_matrix_df[ (corr_matrix_df.index.isin(predictors2[0:j+1]) )==False].copy()
+                print(corr_matrix_df_i.shape)
+                corr_matrix_df_i=corr_matrix_df[[col_i]].query(f"abs({col_i}) >= 0.95").copy()
+                print(corr_matrix_df_i.shape)
+                corr_matrix_df_i.reset_index(inplace=True)
+                ex_i=list(corr_matrix_df_i["index"])
+                ex_i.remove(col_i)
+                exclude+=ex_i
+                return exclude
+        except:
+            pass
 
 
     def __pending(self,group_df, abt:pyspark.sql.DataFrame, target_col):
