@@ -8,14 +8,14 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class Homogeneity:
     
-    def __init__(self,base:dict,tests:dict,compare_cols:list[str],methods_limits:dict = {'ks': 0.05,
+    def __init__(self,base:pd.DataFrame,tests:dict,compare_cols:list[str],methods_limits:dict = {'ks': 0.05,
                                                                                          'kruskal': 0.05,
                                                                                          'mannwhitneyu': 0.05,
                                                                                          'levene': 0.05,
                                                                                          'mean': 0.05,
                                                                                          'quartiles':0.05}) -> None:
         '''
-        base: Dictionary with the alias and dataframe for the base sample
+        base: Base Dataframe
         tests: Dictionary with the aliases and dataframes for each test sample
         compare_cols: Columns to be compared between base and each test sample
         methods: List of methods to test the samples on. 
